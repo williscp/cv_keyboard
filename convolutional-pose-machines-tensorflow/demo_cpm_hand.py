@@ -146,16 +146,16 @@ def main(argv):
         kalman_filter_array = None
 
     with tf.device(tf_device):
-        
+
         repeat=True
         while repeat:
             if FLAGS.DEMO_TYPE == 'image_list':
-                
+
                 image_list = os.listdir('./data')
-                
+
                 for file_name in image_list:
-                              
-            
+
+
                     t1 = time.time()
                     #if FLAGS.DEMO_TYPE.endswith(('png', 'jpg')):
                     file_path = os.path.join('./data', file_name)
@@ -194,7 +194,7 @@ def main(argv):
                     #if cv2.waitKey(0) == ord('q'): break
 
                     cv2.imwrite(os.path.join('./output', file_name), demo_img.astype(np.uint8))
-                
+
                 repeat = False
 
                 #print('fps: %.2f' % (1 / (time.time() - t1)))
@@ -333,7 +333,7 @@ def main(argv):
                 #cv2.imshow('rgb', test_img)
                 #cv2.moveWindow('rgb', 2000, 750)
                 #if cv2.waitKey(1) == ord('q'): break
-                
+
                 cv2.imwrite('./output/{}'.format(os.path.basename(FLAGS.DEMO_TYPE)), output_img)
 
 
