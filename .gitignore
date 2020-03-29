@@ -1,7 +1,8 @@
 data
-convolutional-pose-machines-tensorflow/models/weights
-convolutional-pose-machines-tensorflow/output
-convolutional-pose-machines-tensorflow/test_imgs
+output
+convolutional_pose_machines_tensorflow/models/weights
+convolutional_pose_machines_tensorflow/output
+convolutional_pose_machines_tensorflow/test_imgs
 */__pycache__
 */*/__pycache__
 */*/*/__pycache__

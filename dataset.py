@@ -1,4 +1,5 @@
 import torch
+import torch.utils.data
 import os
 import csv
 import numpy as np
@@ -60,4 +61,4 @@ class Dataset(torch.utils.data.Dataset):
             fc += 1
 
         cap.release()
-        return torch.tensor(buf)
+        return buf #torch.tensor(buf)
