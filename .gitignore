@@ -1,5 +1,7 @@
 data
 output
+videos
+images
 convolutional_pose_machines_tensorflow/models/weights
 convolutional_pose_machines_tensorflow/output
 convolutional_pose_machines_tensorflow/test_imgs
