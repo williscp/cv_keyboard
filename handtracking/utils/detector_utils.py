@@ -32,14 +32,14 @@ category_index = label_map_util.create_category_index(categories)
 
 
 # Load a frozen infrerence graph into memory
-def load_inference_graph():
+def load_inference_graph(path_to_ckpt):
 
     # load frozen tensorflow model into memory
     print("> ====== loading HAND frozen graph into memory")
     detection_graph = tf.Graph()
     with detection_graph.as_default():
         od_graph_def = tf.GraphDef()
-        with tf.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
+        with tf.gfile.GFile(path_to_ckpt, 'rb') as fid:
             serialized_graph = fid.read()
             od_graph_def.ParseFromString(serialized_graph)
             tf.import_graph_def(od_graph_def, name='')

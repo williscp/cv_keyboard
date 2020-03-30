@@ -10,17 +10,17 @@ class Config():
         self.video_fps = 15
 
         self.input_size = 368
-        
-        # hand model 
-        
-        self.hmap_size = 46 
+
+        # hand model
+
+        self.hmap_size = 46
         self.cmap_size = 21
         self.joints = 21
-        self.stage = 6 # number of cmp stages 
+        self.stage = 6 # number of cmp stages
         self.kalman = False
         self.kalman_noise = 3e-2
         self.color_channel = 'RGB'
-        
+
         self.limb_model = [
             [0, 1],
             [1, 2],
@@ -43,7 +43,7 @@ class Config():
             [18, 19],
             [19, 20]
         ]
-        
+
         self.joint_color_code = [
             [139, 53, 255],
             [0, 56, 255],
@@ -57,7 +57,8 @@ class Config():
 
         self.output_dir = './output'
         self.model_dir = './models'
-        self.hand_model_path = './convolutional_pose_machines_tensorflow/models/weights/cpm_hand.pkl'
+        self.hand_pose_estimator_weights = './convolutional_pose_machines_tensorflow/models/weights/cpm_hand.pkl'
+        self.hand_detector_weights = 'handtracking/hand_inference_graph/frozen_inference_graph.pb'
 
         # model
 

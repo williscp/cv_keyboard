@@ -10,6 +10,7 @@ from config import Config
 from dataset import Dataset
 from convolutional_pose_machines_tensorflow.models.nets import cpm_hand_slim
 from convolutional_pose_machines_tensorflow.utils import cpm_utils
+from handtracking.utils import detector_utils
 from visualize import Visualizer
 
 """
@@ -32,9 +33,14 @@ train_loader = torch.utils.data.DataLoader(
     shuffle=True,
     drop_last=True
 )
+"""
+Initialize hand detector
+"""
+
+detection_graph, sess = detector_utils.load_inference_graph()
 
 """
-Initialize hand pose detector
+Initialize hand pose estimator
 """
 
 tf_device = '/gpu:0'
@@ -55,10 +61,10 @@ with tf.device(tf_device):
     model = cpm_hand_slim.CPM_Model(6, 22) # 6 cpm stages, 21 + 1 joints
     model.build_model(input_data, center_map, 1)
 
-sess = tf.Session()
+#sess = tf.Session()
 
 sess.run(tf.global_variables_initializer())
-model.load_weights_from_file(configs.hand_model_path, sess, False)
+model.load_weights_from_file(configs.hand_pose_estimator_weights, sess, False)
 
 test_center_map = cpm_utils.gaussian_img(
     configs.input_size,
@@ -92,6 +98,8 @@ with tf.device(tf_device):
         for image in data:
 
             print(image.shape)
+            boxes, scores = detctor_utils.detect_objects(image, detection_graph, sess)
+            print(boxes)
             test_img_resize = cv2.resize(image, (configs.input_size, configs.input_size))
 
             test_img_input = test_img_resize / 256.0 - 0.5
