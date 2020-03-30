@@ -7,7 +7,7 @@ import os
 from threading import Thread
 from datetime import datetime
 import cv2
-from utils import label_map_util
+from handtracking.utils import label_map_util
 from collections import defaultdict
 
 
@@ -21,7 +21,7 @@ MODEL_NAME = 'hand_inference_graph'
 # Path to frozen detection graph. This is the actual model that is used for the object detection.
 PATH_TO_CKPT = MODEL_NAME + '/frozen_inference_graph.pb'
 # List of the strings that is used to add correct label for each box.
-PATH_TO_LABELS = os.path.join(MODEL_NAME, 'hand_label_map.pbtxt')
+PATH_TO_LABELS = os.path.join('handtracking', MODEL_NAME, 'hand_label_map.pbtxt')
 
 NUM_CLASSES = 1
 # load label map
