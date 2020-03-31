@@ -129,15 +129,22 @@ with tf.device(tf_device):
         previous_right_crop = None
 
         for image in data:
-
+            
+            """
+            Detect bounding boxes
+            """
             print(image.shape)
             #test_img_resize = cv2.resize(image, (configs.input_size, configs.input_size))
-
+            
+            # perform detections, model does not expect a normalized image, normalization leads to worse results
             boxes, scores = detector_utils.detect_objects(image, detection_graph, detect_sess)
             
+            # handle proposals into left and right hands
+            # calculate center points
             hand_1_center = np.array([(boxes[0][1] + boxes[0][3]) / 2, (boxes[0][0] + boxes[0][2]) / 2]) # (x, y)
             hand_2_center = np.array([(boxes[1][1] + boxes[1][3]) / 2, (boxes[1][0] + boxes[1][2]) / 2])
             
+            # arange new proposals based on center points
             if hand_1_center[0] > hand_2_center[0]:
                 left_crop = {'bbox': boxes[1], 'center': hand_2_center, 'score': scores[1]}
                 right_crop = {'bbox': boxes[0], 'center': hand_1_center, 'score': scores[0]}
@@ -145,38 +152,89 @@ with tf.device(tf_device):
                 left_crop = {'bbox': boxes[1], 'center': hand_2_center, 'score': scores[1]}
                 right_crop = {'bbox': boxes[0], 'center': hand_1_center, 'score': scores[0]}
             
+            # compare new proposals with old proposals
             left_crop = choose_best_bbox(previous_left_crop, left_crop)
             right_crop = choose_best_bbox(previous_right_crop, right_crop)
             
+            # another rearrangement 
+            if left_crop['center'][0] > right_crop['center'][0]:
+                old_left_crop = left_crop
+                left_crop = right_crop 
+                right_crop = old_left_crop
+            
+            # update previous proposals
             previous_left_crop = left_crop
             previous_right_crop = right_crop 
             
-            left_hand_img = crop_hand(image, left_crop['bbox'], buffer=15)
-            right_hand_img = crop_hand(image, right_crop['bbox'], buffer=15)
+            # generate crops
+            left_hand_img = crop_hand(image, left_crop['bbox'], buffer=configs.buffer)
+            right_hand_img = crop_hand(image, right_crop['bbox'], buffer=configs.buffer)
                
             #print(scores)
             #print(boxes)
             
-            left_hand_img = cv2.resize(left_hand_img, (320, 480))
-            right_hand_img = cv2.resize(right_hand_img, (320, 480))
+            """
+            Pose estimation
+            """
             
-            both_hand_img = np.concatenate((left_hand_img, right_hand_img), axis=1)
+            # perform estimation on left hand
+            left_hand_img = cv2.resize(left_hand_img, (configs.input_size, configs.input_size))
             
-            print(both_hand_img.shape)
+            # normalize image
+            left_hand_input = left_hand_img / 256.0 - 0.5
+            left_hand_input = np.expand_dims(left_hand_input, axis=0)
             
-            test_img_resize = cv2.resize(image, (configs.input_size, configs.input_size))
-
-            test_img_input = test_img_resize / 256.0 - 0.5
-            test_img_input = np.expand_dims(test_img_input, axis=0)
-
-            predict_heatmap, stage_heatmap_np = pose_sess.run(
+            # predict
+            predict_left_heatmap, stage_left_heatmap_np = pose_sess.run(
                 [model.current_heatmap, model.stage_heatmap],
                 feed_dict = {
-                    'input_image:0': test_img_input,
+                    'input_image:0': left_hand_input,
                     'center_map:0': test_center_map
                 }
             )
-                
+            
+            # perform estimation on right hand
+            right_hand_img = cv2.resize(right_hand_img, (configs.input_size, configs.input_size))
+            right_hand_img = cv2.flip(right_hand_img, 1)
+            
+            # normalize image
+            right_hand_input= right_hand_img / 256.0 - 0.5
+            # a bit of a hack, flip the orientation so the left hand looks like a right hand
+            # model seems to be trained on right hand only 
+            right_hand_input = np.expand_dims(right_hand_input, axis=0)
+            
+            # predict
+            predict_right_heatmap, stage_right_heatmap_np = pose_sess.run(
+                [model.current_heatmap, model.stage_heatmap],
+                feed_dict = {
+                    'input_image:0': right_hand_input,
+                    'center_map:0': test_center_map
+                }
+            )
+             
+            print("PREDICTION DONE")
+
+            """
+            Visualize output 
+            """
+            
+            #print(stage_heatmap_np.shape)
+            
+            # visualize joints
+            
+            left_hand_img = visualizer.visualize_result(left_hand_img, stage_left_heatmap_np, None)
+            right_hand_img = visualizer.visualize_result(right_hand_img, stage_right_heatmap_np, None)
+            
+            
+            left_hand_img = cv2.resize(np.squeeze(left_hand_img), (320, 480))
+            right_hand_img = cv2.resize(np.squeeze(right_hand_img), (320, 480))
+            right_hand_img = cv2.flip(right_hand_img, 1)
+            
+            # combine left and right hands into one output image
+            
+            both_hand_img = np.concatenate((left_hand_img, right_hand_img), axis=1)
+            
+            # constants for plotting
             font = cv2.FONT_HERSHEY_SIMPLEX
             right_of_screen = (550,200)
             left_of_screen = (10, 200)
@@ -184,6 +242,7 @@ with tf.device(tf_device):
             font_color = (255,0,0)
             line_type = 2
             
+            # plot left-hand detection scores
             both_hand_img = cv2.putText(both_hand_img, str(left_crop['score']), 
             left_of_screen, 
             font, 
@@ -191,17 +250,13 @@ with tf.device(tf_device):
             font_color,
             line_type)
             
+            # plot right-hand detection scores
             both_hand_img = cv2.putText(both_hand_img, str(right_crop['score']), 
             right_of_screen, 
             font, 
             font_scale,
             font_color,
             line_type)
-
-            print("PREDICTION DONE")
-            #print(stage_heatmap_np.shape)
-
-            #demo_img = visualizer.visualize_result(image, stage_heatmap_np, None)
 
             out.write(both_hand_img.astype(np.uint8))
 

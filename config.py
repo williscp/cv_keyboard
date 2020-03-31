@@ -10,6 +10,10 @@ class Config():
         self.video_fps = 15
 
         self.input_size = 368
+        
+        # hand detector
+        
+        self.buffer = 30 #pixels around the crop 
 
         # hand model
 
