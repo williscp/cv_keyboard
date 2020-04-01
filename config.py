@@ -13,7 +13,8 @@ class Config():
         
         # hand detector
         
-        self.buffer = 30 #pixels around the crop 
+        self.buffer = 50 #pixels around the crop 
+        self.score_threshold = 0.2 
 
         # hand model
 
