@@ -12,7 +12,7 @@ from convolutional_pose_machines_tensorflow.models.nets import cpm_hand_slim
 from convolutional_pose_machines_tensorflow.utils import cpm_utils
 from handtracking.utils import detector_utils
 from visualize import Visualizer
-from utils import crop_hand, choose_best_bbox
+from utils import DetectionHandler
 
 """
 Start of main method
@@ -20,6 +20,7 @@ Start of main method
 
 configs = Config()
 visualizer = Visualizer(configs)
+detection_handler = DetectionHandler(configs)
 
 """
 Initialize data loader
@@ -119,59 +120,35 @@ with tf.device(tf_device):
         tensor, label = batch
         
         data = tensor.numpy().squeeze()
+        #data = cv2.cvtColor(data, cv2.COLOR_BGR2RGB).squeeze()
 
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         file_name = str(idx) + '.avi'
         print(file_name)
         out = cv2.VideoWriter(os.path.join('output', file_name),fourcc, 10, (640, 480))#configs.video_fps, (640,480))
         
-        previous_left_crop = None
-        previous_right_crop = None
-
         for image in data:
             
             """
             Detect bounding boxes
             """
             print(image.shape)
-            #test_img_resize = cv2.resize(image, (configs.input_size, configs.input_size))
             
             # perform detections, model does not expect a normalized image, normalization leads to worse results
+            
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            
             boxes, scores = detector_utils.detect_objects(image, detection_graph, detect_sess)
             
-            # handle proposals into left and right hands
-            # calculate center points
-            hand_1_center = np.array([(boxes[0][1] + boxes[0][3]) / 2, (boxes[0][0] + boxes[0][2]) / 2]) # (x, y)
-            hand_2_center = np.array([(boxes[1][1] + boxes[1][3]) / 2, (boxes[1][0] + boxes[1][2]) / 2])
-            
-            # arange new proposals based on center points
-            if hand_1_center[0] > hand_2_center[0]:
-                left_crop = {'bbox': boxes[1], 'center': hand_2_center, 'score': scores[1]}
-                right_crop = {'bbox': boxes[0], 'center': hand_1_center, 'score': scores[0]}
-            else:
-                left_crop = {'bbox': boxes[1], 'center': hand_2_center, 'score': scores[1]}
-                right_crop = {'bbox': boxes[0], 'center': hand_1_center, 'score': scores[0]}
-            
-            # compare new proposals with old proposals
-            left_crop = choose_best_bbox(previous_left_crop, left_crop)
-            right_crop = choose_best_bbox(previous_right_crop, right_crop)
-            
-            # another rearrangement 
-            if left_crop['center'][0] > right_crop['center'][0]:
-                old_left_crop = left_crop
-                left_crop = right_crop 
-                right_crop = old_left_crop
-            
-            # update previous proposals
-            previous_left_crop = left_crop
-            previous_right_crop = right_crop 
-            
+            left_crop, right_crop, left_score, right_score = detection_handler.choose_next_candidates(boxes, scores)
+           
             # generate crops
-            left_hand_img = crop_hand(image, left_crop['bbox'], buffer=configs.buffer)
-            right_hand_img = crop_hand(image, right_crop['bbox'], buffer=configs.buffer)
-               
-            #print(scores)
-            #print(boxes)
+            left_hand_img = detection_handler.crop_hand(image, left_crop)
+            right_hand_img = detection_handler.crop_hand(image, right_crop)
+            
+            # convert to BGR
+            left_hand_img = cv2.cvtColor(left_hand_img, cv2.COLOR_RGB2BGR)
+            right_hand_img = cv2.cvtColor(right_hand_img, cv2.COLOR_RGB2BGR)
             
             """
             Pose estimation
@@ -243,7 +220,7 @@ with tf.device(tf_device):
             line_type = 2
             
             # plot left-hand detection scores
-            both_hand_img = cv2.putText(both_hand_img, str(left_crop['score']), 
+            both_hand_img = cv2.putText(both_hand_img, str(left_score), 
             left_of_screen, 
             font, 
             font_scale,
@@ -251,7 +228,7 @@ with tf.device(tf_device):
             line_type)
             
             # plot right-hand detection scores
-            both_hand_img = cv2.putText(both_hand_img, str(right_crop['score']), 
+            both_hand_img = cv2.putText(both_hand_img, str(right_score), 
             right_of_screen, 
             font, 
             font_scale,
