@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import cv2
 
 
 # NMS code from https://github.com/rbgirshick/fast-rcnn/
@@ -34,7 +35,35 @@ def nms(dets, scores, thresh):
 
     return keep
 
+def get_global_pose(heatmap, bbox, input_size, hmap_size, num_joints):
+    
+    # Returns a list of global joint pixel coordinates joint_x, joint_y (len = num_joints)
+    
+    # calculate bbox attr:
+    
+    top, left, bottom, right = bbox 
+    
+    width = right - left 
+    height = bottom - top 
+    
+    #center = ((right + left) / 2, (top + bottom) / 2)
+    
+    last_heatmap = heatmap[-1][0, :, :, 0:num_joints].reshape(
+    (hmap_size, hmap_size, num_joints))
 
+    last_heatmap = cv2.resize(last_heatmap, (input_size, input_size))
+    last_heatmap = np.reshape(last_heatmap, (-1, num_joints))
+
+    joint_x, joint_y = np.unravel_index(np.argmax(last_heatmap, axis=0),(input_size, input_size))
+    
+    joint_x = joint_x / float(input_size)
+    joint_y = joint_y / float(input_size) 
+    
+    joint_x = joint_x * width + left
+    joint_y = joint_y * height + top
+    
+    return joint_x, joint_y
+    
 def choose_best_bbox(prev_crop, new_crop):
     
     """
