@@ -20,7 +20,7 @@ Start of main method
 
 configs = Config()
 visualizer = None
-if configs.visualize_output or configs.visualize_joint_positions or configs.visualize_stage_heatmaps:
+if configs.visualize_cropped_output or configs.visualize_full_output or configs.visualize_joint_positions or configs.visualize_stage_heatmaps:
     visualizer = Visualizer(configs)
 detection_handler = DetectionHandler(configs)
 
@@ -147,7 +147,7 @@ with tf.device(tf_device):
             
             boxes, scores = detector_utils.detect_objects(image, detection_graph, detect_sess)
             
-            left_crop, right_crop, left_score, right_score = detection_handler.choose_next_candidates(boxes, scores)
+            left_crop, right_crop, left_score, right_score = detection_handler.choose_next_candidates(image, boxes, scores)
            
             # generate crops
             left_hand_img = detection_handler.crop_hand(image, left_crop)
@@ -203,7 +203,7 @@ with tf.device(tf_device):
                 
                 left_data = (left_hand_img, left_crop, stage_left_heatmap_np) 
                 right_data = (right_hand_img, right_crop, stage_right_heatmap_np)
-                visualizer.update_capture(left_data, right_data)
+                visualizer.update_capture(cv2.cvtColor(image, cv2.COLOR_RGB2BGR), left_data, right_data)
         
         if visualizer:
             

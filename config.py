@@ -62,7 +62,8 @@ class Config():
 
         # output
         
-        self.visualize_output = False # output detection + joint estimates
+        self.visualize_cropped_output = False # output detection + joint estimates
+        self.visualize_full_output = True
         self.visualize_joint_positions = True # output joint locations as npy files 
         self.visualize_stage_heatmaps = False # output last layer heatmaps
         
