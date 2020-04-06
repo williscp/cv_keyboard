@@ -73,5 +73,15 @@ class Config():
         self.hand_detector_weights = 'handtracking/hand_inference_graph/frozen_inference_graph.pb'
 
         # model
-
+        
+        self.epochs = 1000
         self.lr = 1e-3
+        self.input_freqs = 11 
+        self.spectrogram_mean = 2.59783414913e-05
+        
+        # spectrogram configs:
+        
+        self.spectrogram_window_type = 'hann'
+        self.spectrogram_window_size = 20
+        self.spectrogram_window_overlap = 15
+        
