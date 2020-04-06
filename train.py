@@ -27,7 +27,7 @@ detection_handler = DetectionHandler(configs)
 """
 Initialize data loader
 """
-train_set = Dataset(configs)
+train_set = Dataset(configs, label_path='labels/train.csv')
 
 train_loader = torch.utils.data.DataLoader(
     train_set,

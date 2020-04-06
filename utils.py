@@ -1,7 +1,8 @@
 import math
 import numpy as np
 import cv2
-
+import torch 
+from dataset import CHAR_TO_CLASS
 
 # NMS code from https://github.com/rbgirshick/fast-rcnn/
 # Girshick et al.
@@ -34,6 +35,30 @@ def nms(dets, scores, thresh):
         order = order[inds + 1]
 
     return keep
+
+def print_accuracy(data_loader, model):
+    
+    model = model.eval()
+        
+    correct = np.zeros(len(CHAR_TO_CLASS))
+    total = np.zeros(len(CHAR_TO_CLASS))
+
+    with torch.no_grad():
+        for batch in data_loader:
+            data, label = batch 
+            
+            preds = model(data)
+            preds = torch.argmax(preds, dim=1)
+
+            for idx in range(28):
+                label_for_char = torch.ones((label.shape[0], label.shape[1])).to("cuda") * idx
+                correct[idx] += torch.sum((preds == label_for_char) * (label == label_for_char))
+                total[idx] += torch.sum((label == label_for_char))
+
+    for idx in range(len(correct)):
+        print("Accuracy for class {} : {}".format(list(CHAR_TO_CLASS.keys())[idx], correct[idx] / total[idx]))
+    print("Mean accuracy: {}".format(np.sum(correct) / np.sum(total)))
+    
 
 def get_global_pose(heatmap, bbox, input_size, hmap_size, num_joints, flip=False):
     
