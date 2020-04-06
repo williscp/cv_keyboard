@@ -2,17 +2,249 @@ import cv2
 import time
 import math
 import numpy as np 
+import torch
+import os
+
+from utils import get_global_pose
+
+# constants for plotting
+FONT = cv2.FONT_HERSHEY_SIMPLEX
+RIGHT_OF_SCREEN = (550,200)
+LEFT_OF_SCREEN = (10,200)
+FONT_SCALE = 1
+FONT_COLOR = (255,0,0)
+LINE_TYPE = 2
+
+
+def integral_heatmap_layer(heatmap):
+
+    N, K, H, W,  = heatmap.shape
+    
+    # apply softmax:
+    
+    heatmap = heatmap.reshape(N, K, -1)
+    #print(torch.argmax(heatmap, dim=2))
+    probmap = torch.nn.functional.softmax(heatmap, dim=2)
+    #print(torch.argmax(heatmap, dim=2))
+    
+    #print(torch.max(heatmap, dim=2))
+    #print(torch.min(heatmap, dim=2))
+    h_norm = probmap.reshape(N, K, H, W)
+
+    # generate the integrals 
+
+    x_linspace = torch.linspace(0, 1, W).repeat(N, K, H, 1)#.to("cuda")
+    y_linspace = torch.linspace(0, 1, H).repeat(N, K, W, 1).permute(0,1,3,2)#.to("cuda")
+
+    x_weights = x_linspace * h_norm 
+    y_weights = y_linspace * h_norm 
+
+    x_positions = torch.sum(torch.sum(x_weights, dim=3), dim=2).unsqueeze(-1)
+    y_positions = torch.sum(torch.sum(y_weights, dim=3), dim=2).unsqueeze(-1)
+    
+    #print(x_positions)
+    pose = torch.cat((x_positions, y_positions), dim=2)
+    
+    return pose
 
 class Visualizer():
     
     def __init__(self, configs):
+        
+        self.video_fps = configs.video_fps
+        
         self.limb_model = configs.limb_model
         self.joints = configs.joints 
-        self.joint_color_code = configs.joint_color_code 
+        self.joint_color_code = configs.joint_color_code
         
         self.hmap_size = configs.hmap_size
         self.cmap_size = configs.cmap_size
+        self.input_size = configs.input_size
+        
+        self.visualize_cropped_output = configs.visualize_cropped_output
+        self.visualize_full_output = configs.visualize_full_output
+        self.visualize_joint_positions = configs.visualize_joint_positions 
+        self.visualize_stage_heatmaps = configs.visualize_stage_heatmaps
+        
+        self.output_dir = configs.output_dir 
+            
+    def start_capture(self, idx):
+            
+        if self.visualize_cropped_output:
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            file_name = str(idx) + '.avi'
+            out_path = os.path.join(self.output_dir, 'cropped', file_name)
+            self.cropped_out_stream = cv2.VideoWriter(out_path, fourcc, self.video_fps, (640, 480))
+            
+        if self.visualize_full_output:
+            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+            file_name = str(idx) + '.avi'
+            out_path = os.path.join(self.output_dir, 'full', file_name)
+            self.full_out_stream = cv2.VideoWriter(out_path, fourcc, self.video_fps, (self.input_size, self.input_size))
+            
+        if self.visualize_joint_positions:
+            self.left_joint_signal = []
+            self.right_joint_signal = []
+        
+        if self.visualize_stage_heatmaps:
+            self.left_stage_heatmaps = []
+            self.right_stage_heatmaps = []
+                                              
+    def update_capture(self, full_img, left_data, right_data):
+        
+        left_hand_img, left_crop, stage_left_heatmap_np = left_data
+        right_hand_img, right_crop, stage_right_heatmap_np = right_data
+        
+        if self.visualize_cropped_output:
+            # visualize joints
 
+            left_hand_img = self.visualize_result(left_hand_img, stage_left_heatmap_np, None)
+            right_hand_img = self.visualize_result(right_hand_img, stage_right_heatmap_np, None)
+            left_hand_img = cv2.resize(np.squeeze(left_hand_img), (320, 480))
+            right_hand_img = cv2.resize(np.squeeze(right_hand_img), (320, 480))
+            right_hand_img = cv2.flip(right_hand_img, 1)
+
+            # combine left and right hands into one output image
+
+            both_hand_img = np.concatenate((left_hand_img, right_hand_img), axis=1)
+            
+            # plot left-hand detection scores
+            both_hand_img = cv2.putText(both_hand_img, str(left_score), 
+            LEFT_OF_SCREEN, 
+            FONT, 
+            FONT_SCALE,
+            FONT_COLOR,
+            LINE_TYPE)
+            
+            # plot right-hand detection scores
+            both_hand_img = cv2.putText(both_hand_img, str(right_score), 
+            RIGHT_OF_SCREEN, 
+            FONT, 
+            FONT_SCALE,
+            FONT_COLOR,
+            LINE_TYPE)
+            
+            self.cropped_out_stream.write(both_hand_img.astype(np.uint8))
+            
+        if self.visualize_full_output:
+           
+            x_joints, y_joints = get_global_pose(
+                stage_left_heatmap_np,
+                left_crop,
+                self.input_size,
+                self.hmap_size,
+                self.joints,
+                flip=False)
+            
+            left_joints = np.column_stack((x_joints, y_joints))
+                    
+            x_joints, y_joints = get_global_pose(
+                stage_right_heatmap_np,
+                right_crop,
+                self.input_size,
+                self.hmap_size,
+                self.joints,
+                flip=True)
+            
+            right_joints = np.column_stack((x_joints, y_joints))
+                                                      
+            frame = self.plot_joints(full_img, left_joints, right_joints, left_crop, right_crop)
+            
+            self.full_out_stream.write(frame.astype(np.uint8))
+            
+        if self.visualize_joint_positions:
+            
+            x_joints, y_joints = get_global_pose(
+                stage_right_heatmap_np,
+                right_crop,
+                self.input_size,
+                self.hmap_size,
+                self.joints)
+            
+            self.right_joint_signal.append(np.column_stack((x_joints, y_joints)))
+            
+            x_joints, y_joints = get_global_pose(
+                stage_left_heatmap_np,
+                left_crop,
+                self.input_size,
+                self.hmap_size,
+                self.joints)
+            
+            self.left_joint_signal.append(np.column_stack((x_joints, y_joints)))
+            
+        if self.visualize_stage_heatmaps:
+            
+            self.left_stage_heatmap.append(stage_left_heatmap_np[5][0])
+            self.right_stage_heatmap.append(stage_right_heatmap_np[5][0])
+            
+    def end_capture(self, idx):
+        
+        if self.visualize_cropped_output:
+            self.cropped_out_stream.release()
+        
+        if self.visualize_full_output:
+            self.full_out_stream.release()
+            
+        if self.visualize_joint_positions:
+            
+            left_file_path = os.path.join(self.output_dir, 'signals','{}_left_joint_signal.npy'.format(str(idx)))
+            right_file_path = os.path.join(self.output_dir, 'signals','{}_right_joint_signal.npy'.format(str(idx)))
+
+            np.save(left_file_path, self.left_joint_signal)
+            np.save(right_file_path, self.right_joint_signal)                                                 
+            
+        if self.visualize_stage_heatmaps:
+            
+            left_file_path = os.path.join(self.output_dir, 'heatmaps', '{}_left_stage_heatmap.npy'.format(str(idx)))
+            right_file_path = os.path.join(self.output_dir, 'heatmaps', '{}_right_stage_heatmap.npy'.format(str(idx)))
+            
+            np.save(left_file_path, self.left_stage_heatmap)
+            np.save(right_file_path, self.right_stage_heatmap)
+            
+    def plot_joints(self, img, left_joints, right_joints, left_crop, right_crop):
+        
+        img = cv2.resize(img, (self.input_size, self.input_size))
+        
+        for joint_num in range(self.joints):
+
+            joint_coord = (int(left_joints[joint_num][0] * self.input_size), int(left_joints[joint_num][1] * self.input_size))
+
+            color_code_num = (joint_num // 4)
+            if joint_num in [0, 4, 8, 12, 16]:
+                joint_color = list(map(lambda x: x + 35 * (joint_num % 4), self.joint_color_code[color_code_num]))
+                cv2.circle(img, center=(joint_coord[0], joint_coord[1]), radius=1, color=joint_color, thickness=-1)
+            else:
+                joint_color = list(map(lambda x: x + 35 * (joint_num % 4), self.joint_color_code[color_code_num]))
+                cv2.circle(img, center=(joint_coord[0], joint_coord[1]), radius=1, color=joint_color, thickness=-1)
+                
+        for joint_num in range(self.joints):
+
+            joint_coord = (int(right_joints[joint_num][0] * self.input_size), int(right_joints[joint_num][1] * self.input_size))
+
+            color_code_num = (joint_num // 4)
+            if joint_num in [0, 4, 8, 12, 16]:
+                joint_color = list(map(lambda x: x + 35 * (joint_num % 4), self.joint_color_code[color_code_num]))
+                cv2.circle(img, center=(joint_coord[0], joint_coord[1]), radius=1, color=joint_color, thickness=-1)
+            else:
+                joint_color = list(map(lambda x: x + 35 * (joint_num % 4), self.joint_color_code[color_code_num]))
+                cv2.circle(img, center=(joint_coord[0], joint_coord[1]), radius=1, color=joint_color, thickness=-1)
+        
+        left_crop = left_crop * self.input_size
+        
+        top, left, bottom, right = left_crop
+        
+        img = cv2.rectangle(img, (left, top), (right, bottom), (77, 255, 9), 3, 1)
+        
+        right_crop = right_crop * self.input_size
+        
+        top, left, bottom, right = right_crop
+        
+        img = cv2.rectangle(img, (left, top), (right, bottom), (77, 255, 9), 3, 1)
+
+
+        #img = cv2.resize(img, (640, 480))
+        return img
+        
     def visualize_result(self, test_img, stage_heatmap_np, kalman_filter_array):
         
         """
@@ -65,10 +297,28 @@ class Visualizer():
                     joint_color = list(map(lambda x: x + 35 * (joint_num % 4), self.joint_color_code[color_code_num]))
                     cv2.circle(test_img, center=(joint_coord[1], joint_coord[0]), radius=3, color=joint_color, thickness=-1)
         else:
+            
+            #heatmap_tensor = torch.tensor(last_heatmap, dtype=torch.float)
+            #heatmap_tensor = heatmap_tensor.permute(2, 1, 0).unsqueeze(0) # (W, H, K) -> (K, H, W) -> (N, K, H, W)
+            
+            #print(heatmap_tensor.shape)
+            
+            #joints_tensor = integral_heatmap_layer(heatmap_tensor)
+            #joints = joints_tensor.detach().squeeze(0).numpy()
+            
             for joint_num in range(self.joints):
+                    
+                    
                 joint_coord = np.unravel_index(np.argmax(last_heatmap[:, :, joint_num]),
-                                               (test_img.shape[0], test_img.shape[1]))
+                                              (test_img.shape[0], test_img.shape[1]))
                 joint_coord_set[joint_num, :] = [joint_coord[0], joint_coord[1]]
+                
+                #print("Joint coords")
+                #print(joint_coord)
+                #print((joints[joint_num][0]* test_img.shape[0], joints[joint_num][1]*test_img.shape[1]))
+               
+                #joint_coord = joints[joint_num]
+                #joint_coord_set[joint_num, :] = [joint_coord[0], joint_coord[1]]
 
                 color_code_num = (joint_num // 4)
                 if joint_num in [0, 4, 8, 12, 16]:

@@ -13,11 +13,13 @@ class Config():
         
         # hand detector
         
+        self.detector_gpu_alloc = 0.3
         self.buffer = 50 #pixels around the crop 
         self.score_threshold = 0.2 
 
         # hand model
-
+        
+        self.estimator_gpu_alloc = 0.3
         self.hmap_size = 46
         self.cmap_size = 21
         self.joints = 21
@@ -59,7 +61,12 @@ class Config():
         ]
 
         # output
-
+        
+        self.visualize_cropped_output = False # output detection + joint estimates
+        self.visualize_full_output = True
+        self.visualize_joint_positions = True # output joint locations as npy files 
+        self.visualize_stage_heatmaps = False # output last layer heatmaps
+        
         self.output_dir = './output'
         self.model_dir = './models'
         self.hand_pose_estimator_weights = './convolutional_pose_machines_tensorflow/models/weights/cpm_hand.pkl'

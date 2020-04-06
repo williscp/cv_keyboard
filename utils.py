@@ -1,5 +1,6 @@
 import math
 import numpy as np
+import cv2
 
 
 # NMS code from https://github.com/rbgirshick/fast-rcnn/
@@ -34,7 +35,38 @@ def nms(dets, scores, thresh):
 
     return keep
 
+def get_global_pose(heatmap, bbox, input_size, hmap_size, num_joints, flip=False):
+    
+    # Returns a list of global joint pixel coordinates joint_x, joint_y (len = num_joints)
+    
+    # calculate bbox attr:
+    top, left, bottom, right = bbox
+        
+    width = right - left 
+    height = bottom - top 
+    
+    #center = ((right + left) / 2, (top + bottom) / 2)
+    
+    last_heatmap = heatmap[-1][0, :, :, 0:num_joints].reshape(
+    (hmap_size, hmap_size, num_joints))
 
+    #last_heatmap = cv2.resize(last_heatmap, (100, 100))
+    last_heatmap = np.reshape(last_heatmap, (-1, num_joints))
+
+    joint_y, joint_x = np.unravel_index(np.argmax(last_heatmap, axis=0),(hmap_size, hmap_size))
+    
+    joint_x = joint_x / float(hmap_size)
+    
+    if flip:
+        joint_x = 1 - joint_x
+        
+    joint_y = joint_y / float(hmap_size)
+    
+    joint_x = (joint_x * width) + left
+    joint_y = (joint_y * height) + top
+    
+    return joint_x, joint_y
+    
 def choose_best_bbox(prev_crop, new_crop):
     
     """
@@ -288,12 +320,15 @@ class DetectionHandler():
         
         return (box[1] + box[3]) / 2.0, (box[0] + box[2]) / 2.0 #(x,y)
     
-    def choose_next_candidates(self, boxes, scores):
+    def choose_next_candidates(self, image, boxes, scores):
 
         if scores[1] < self.threshold:
             # if the best two proposals do not have sufficiently high scores, just return previous 
             # proposals
             return self.left_box, self.right_box, self.left_score, self.right_score
+        
+        boxes[0] = self.format_bbox(image, boxes[0])
+        boxes[1] = self.format_bbox(image, boxes[1])
         
         x0_center, _ = self.get_center(boxes[0])
         x1_center, _ = self.get_center(boxes[1])
@@ -314,12 +349,28 @@ class DetectionHandler():
 
         return self.left_box, self.right_box, self.left_score, self.right_score
     
+    def format_bbox(self, image, box):
+        
+        H, W, _ = image.shape
+        
+        top, left, bottom, right = box 
+        
+        left = max(box[1] - (self.buffer / W), 0.0)
+        right = min(box[3] + (self.buffer / W), 1.0)
+        
+        top = max(box[0] - (self.buffer / H), 0.0)
+        bottom = min(box[2] + (self.buffer / W), 1.0)
+        
+        return (top, left, bottom, right)
+        
     def crop_hand(self, image, box):
 
         """
         Method for generating a crop around a detection, given the image and the bounding box 
         assumes bounding-box is (top, left, bottom, right) between 0 and 1
         adds a buffer of pixels on each side of the image # TODO: handle edges 
+        
+        """
         """
         x_center, y_center = self.get_center(box)
 
@@ -332,6 +383,17 @@ class DetectionHandler():
 
         # Conver to square crop 
         width = right - left 
+        
+        """
+        H, W, _ = image.shape
+        
+        top, left, bottom, right = box
+        
+        top = int(top * H)
+        bottom = int(bottom * H)
+        
+        left = int(left * W)
+        right = int(right * W)
 
         #top = int(max((y_center - (width / 2)), 0))
         #bottom = int(max((y_center + (width / 2)), 0))

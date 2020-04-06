@@ -12,14 +12,16 @@ from convolutional_pose_machines_tensorflow.models.nets import cpm_hand_slim
 from convolutional_pose_machines_tensorflow.utils import cpm_utils
 from handtracking.utils import detector_utils
 from visualize import Visualizer
-from utils import DetectionHandler
+from utils import DetectionHandler, get_global_pose
 
 """
 Start of main method
 """
 
 configs = Config()
-visualizer = Visualizer(configs)
+visualizer = None
+if configs.visualize_cropped_output or configs.visualize_full_output or configs.visualize_joint_positions or configs.visualize_stage_heatmaps:
+    visualizer = Visualizer(configs)
 detection_handler = DetectionHandler(configs)
 
 """
@@ -45,6 +47,7 @@ tf_device = '/gpu:0'
 # load frozen tensorflow model into memory
 print("> ====== loading HAND frozen graph into memory")
 
+
 with tf.device(tf_device):
     detection_graph = tf.Graph()
     with detection_graph.as_default():
@@ -55,8 +58,10 @@ with tf.device(tf_device):
             serialized_graph = file.read()
             od_graph_def.ParseFromString(serialized_graph)
             tf.import_graph_def(od_graph_def, name='')
-
-        detect_sess = tf.Session(graph=detection_graph)
+            
+        tf_config = tf.ConfigProto()
+        tf_config.gpu_options.per_process_gpu_memory_fraction = configs.detector_gpu_alloc
+        detect_sess = tf.Session(graph=detection_graph, config=tf_config)
 
     print(">  ====== Hand Inference graph loaded.")
 
@@ -65,9 +70,6 @@ with tf.device(tf_device):
 """
 Initialize hand pose estimator
 """
-
-print("IMAGE TENSOR:")
-print(detection_graph.get_tensor_by_name('image_tensor:0'))
 
 with tf.device(tf_device):
     """Build graph"""
@@ -86,12 +88,15 @@ with tf.device(tf_device):
     model = cpm_hand_slim.CPM_Model(6, 22) # 6 cpm stages, 21 + 1 joints
     model.build_model(input_data, center_map, 1)
 
-pose_sess = tf.Session()
+    
+tf_config = tf.ConfigProto()
+tf_config.gpu_options.per_process_gpu_memory_fraction = configs.estimator_gpu_alloc
+pose_sess = tf.Session(config=tf_config)
 
-print("GRAPH:")
-print(detection_graph)
-print("GLOBAL VARIABLES:")
-print(tf.global_variables())
+#print("GRAPH:")
+#print(detection_graph)
+#print("GLOBAL VARIABLES:")
+#print(tf.global_variables())
 
 pose_sess.run(tf.global_variables_initializer())
 #print(pose_sess.graph)
@@ -113,34 +118,36 @@ test_center_map = np.reshape(
     [1, configs.input_size, configs.input_size, 1]
 )
 
-file_list = ['data/videos/0.mp4', 'data/videos/1.mp4', 'data/videos/2.mp4']
 with tf.device(tf_device):
 
     for idx, batch in enumerate(train_loader):
-        tensor, label = batch
+        data, label = batch
         
-        data = tensor.numpy().squeeze()
+        video_id, tensor = data 
+        video_id = video_id.item()
+        
+        video = tensor.numpy().squeeze()
         #data = cv2.cvtColor(data, cv2.COLOR_BGR2RGB).squeeze()
-
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        file_name = str(idx) + '.avi'
-        print(file_name)
-        out = cv2.VideoWriter(os.path.join('output', file_name),fourcc, 10, (640, 480))#configs.video_fps, (640,480))
         
-        for image in data:
+        print("Video {}".format(video_id))
+        
+        if visualizer: 
+            
+            visualizer.start_capture(video_id)
+            
+        for image in video:
             
             """
             Detect bounding boxes
             """
-            print(image.shape)
-            
             # perform detections, model does not expect a normalized image, normalization leads to worse results
             
+            # convert to RGB
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             
             boxes, scores = detector_utils.detect_objects(image, detection_graph, detect_sess)
             
-            left_crop, right_crop, left_score, right_score = detection_handler.choose_next_candidates(boxes, scores)
+            left_crop, right_crop, left_score, right_score = detection_handler.choose_next_candidates(image, boxes, scores)
            
             # generate crops
             left_hand_img = detection_handler.crop_hand(image, left_crop)
@@ -188,59 +195,19 @@ with tf.device(tf_device):
                     'center_map:0': test_center_map
                 }
             )
-             
-            print("PREDICTION DONE")
-
+                        
             """
-            Visualize output 
+            Update visualizer 
             """
+            if visualizer:
+                
+                left_data = (left_hand_img, left_crop, stage_left_heatmap_np) 
+                right_data = (right_hand_img, right_crop, stage_right_heatmap_np)
+                visualizer.update_capture(cv2.cvtColor(image, cv2.COLOR_RGB2BGR), left_data, right_data)
+        
+        if visualizer:
             
-            #print(stage_heatmap_np.shape)
-            
-            # visualize joints
-            
-            left_hand_img = visualizer.visualize_result(left_hand_img, stage_left_heatmap_np, None)
-            right_hand_img = visualizer.visualize_result(right_hand_img, stage_right_heatmap_np, None)
-            
-            
-            left_hand_img = cv2.resize(np.squeeze(left_hand_img), (320, 480))
-            right_hand_img = cv2.resize(np.squeeze(right_hand_img), (320, 480))
-            right_hand_img = cv2.flip(right_hand_img, 1)
-            
-            # combine left and right hands into one output image
-            
-            both_hand_img = np.concatenate((left_hand_img, right_hand_img), axis=1)
-            
-            # constants for plotting
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            right_of_screen = (550,200)
-            left_of_screen = (10, 200)
-            font_scale = 1
-            font_color = (255,0,0)
-            line_type = 2
-            
-            # plot left-hand detection scores
-            both_hand_img = cv2.putText(both_hand_img, str(left_score), 
-            left_of_screen, 
-            font, 
-            font_scale,
-            font_color,
-            line_type)
-            
-            # plot right-hand detection scores
-            both_hand_img = cv2.putText(both_hand_img, str(right_score), 
-            right_of_screen, 
-            font, 
-            font_scale,
-            font_color,
-            line_type)
-
-            out.write(both_hand_img.astype(np.uint8))
-
-        out.release()
-
-        #file_name = os.path.basename(file)
-        #cv2.imwrite(os.path.join('./output', file_name), demo_img.astype(np.uint8))
+            visualizer.end_capture(video_id)
 
 #epochs = 1
 #for epoch in range(epochs):

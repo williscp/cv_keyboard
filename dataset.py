@@ -38,7 +38,7 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         video_tensor =  self.video_to_tensor(os.path.join(self.data_dir, self.data[idx]))
 
-        return video_tensor, self.labels[idx]
+        return (idx, video_tensor), self.labels[idx]
 
 
     def video_to_tensor(self, video_file):
