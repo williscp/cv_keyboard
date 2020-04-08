@@ -8,6 +8,7 @@ import cv2
 import json
 
 CHAR_TO_CLASS = {
+    'None': 0,
     'a': 1,
     'b': 2,
     'c': 3,
@@ -37,12 +38,14 @@ CHAR_TO_CLASS = {
     ' ': 27,
 }
 
+EPSILON = 0.01
+
 class Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, configs):
+    def __init__(self, configs, data_dir, label_path):
 
-        self.data_dir = configs.data_dir
-        self.label_path = configs.label_path
+        self.data_dir = data_dir
+        self.label_path = label_path
         self.video_sampling_rate = configs.video_sampling_rate
 
         with open(self.label_path) as csvfile:
@@ -98,10 +101,10 @@ class Dataset(torch.utils.data.Dataset):
     
 class SpectrogramDataset(torch.utils.data.Dataset):
     
-    def __init__(self, configs):
+    def __init__(self, configs, data_dir, label_path):
         
-        self.data_dir = configs.data_dir
-        self.label_path = configs.label_path
+        self.data_dir = data_dir
+        self.label_path = label_path
         self.data_mean = configs.spectrogram_mean
 
         
@@ -122,9 +125,9 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         return len(self.labels)
     
     def __getitem__(self, idx):
-        z = np.load(os.path.join(self.data_dir, 'spectrograms', '{}_z.npy'.format(idx)))
-        f = np.load(os.path.join(self.data_dir, 'spectrograms', '{}_f.npy'.format(idx)))
-        t = np.load(os.path.join(self.data_dir, 'spectrograms', '{}_t.npy'.format(idx)))
+        z = np.load(os.path.join(self.data_dir, '{}_z.npy'.format(idx)))
+        f = np.load(os.path.join(self.data_dir, '{}_f.npy'.format(idx)))
+        t = np.load(os.path.join(self.data_dir, '{}_t.npy'.format(idx)))
         
         # normalize:
         
@@ -167,7 +170,7 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         
         for idx, label in enumerate(self.labels):
             
-            z = np.load(os.path.join(self.data_dir, 'spectrograms', '{}_z.npy'.format(idx)))
+            z = np.load(os.path.join(self.data_dir, '{}_z.npy'.format(idx)))
             
             z = np.moveaxis(z, -1, 0)
             
@@ -179,5 +182,27 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         print(np.mean(data))
         print(np.std(data))
         
+    def get_class_weights(self):
+        
+        occurences = np.zeros(len(CHAR_TO_CLASS.keys()))
+        
+        for idx, labels in enumerate(self.labels):
+            
+            label, time_stamps = self.labels[idx]
+            
+            t = np.load(os.path.join(self.data_dir, '{}_t.npy'.format(idx)))
+            
+            occurences[0] += len(t) - len(label)
+            for char in label:
+                occurences[CHAR_TO_CLASS[char]] += 1
+            
+        occurences = (occurences / float(np.sum(occurences))) + EPSILON
+        
+        weights = np.ones(len(CHAR_TO_CLASS.keys())) / occurences 
+        weights = weights / np.sum(weights)
+        
+        print(weights)
+                
+            
             
             

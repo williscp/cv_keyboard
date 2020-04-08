@@ -5,7 +5,6 @@ class Config():
         # data loading
 
         self.data_dir = './data'
-        self.label_path = './data/train.csv'
         self.video_sampling_rate = 1
         self.video_fps = 15
 
@@ -74,10 +73,17 @@ class Config():
 
         # model
         
-        self.epochs = 1000
+        self.epochs = 250
         self.lr = 1e-3
         self.input_freqs = 11 
         self.spectrogram_mean = 2.59783414913e-05
+        self.class_weights = [
+            0.00157526, 0.01949247, 0.03721764, 0.03207116, 0.03721764, 0.01428861,
+            0.03624818, 0.03445327, 0.02999715, 0.02343101, 0.0756698, 0.04296288,
+            0.0260642, 0.03445327, 0.0192232, 0.01556738, 0.04167618, 0.08002114,
+            0.02034753, 0.02230434, 0.01949247, 0.02936416, 0.05480771, 0.04901612,
+            0.0756698, 0.03721764, 0.08002114, 0.0101286]
+
         
         # spectrogram configs:
         
