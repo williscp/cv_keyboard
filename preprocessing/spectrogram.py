@@ -40,5 +40,5 @@ class SpectrogramGenerator():
             
         
         # returns joints, left/right, x/y, spectrogram
-        return spectrograms, t, f
+        return np.array(spectrograms), t, f
             

@@ -36,7 +36,7 @@ def nms(dets, scores, thresh):
 
     return keep
 
-def print_accuracy(data_loader, model):
+def print_accuracy(data_loader, model, debug=False, activation_only=False):
     
     model = model.eval()
         
@@ -47,8 +47,15 @@ def print_accuracy(data_loader, model):
         for batch in data_loader:
             data, label = batch 
             
+            if activation_only:
+                label = torch.clamp(label, 0, 1)
+            
             preds = model(data)
             preds = torch.argmax(preds, dim=1)
+            
+            if debug:
+                print(preds)
+                print(label)
 
             for idx in range(28):
                 label_for_char = torch.ones((label.shape[0], label.shape[1])).to("cuda") * idx
@@ -58,6 +65,8 @@ def print_accuracy(data_loader, model):
     for idx in range(len(correct)):
         print("Accuracy for class {} : {}".format(list(CHAR_TO_CLASS.keys())[idx], correct[idx] / total[idx]))
     print("Mean accuracy: {}".format(np.sum(correct) / np.sum(total)))
+    
+    return np.sum(correct) / np.sum(total)
     
 
 def get_global_pose(heatmap, bbox, input_size, hmap_size, num_joints, flip=False):

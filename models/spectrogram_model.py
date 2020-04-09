@@ -45,7 +45,7 @@ class SpectrogramConvModel(nn.Module):
         
         self.conv1 = nn.Conv2d(in_channels=21 * 2 * 2, out_channels=256, kernel_size=(3,3), stride=1, padding=(0,1))
         self.batch1 = nn.BatchNorm2d(num_features=256)
-        self.conv2 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(1,1), stride=1, padding=(0,0))
+        self.conv2 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=(1,1), stride=1, padding=(1,1))
         self.batch2 = nn.BatchNorm2d(num_features=512)
         self.pool1 = nn.MaxPool2d(kernel_size=(3,1), stride=None, padding=0)
         self.conv3 = nn.Conv2d(in_channels=512, out_channels=512, kernel_size=(3,3), stride=1, padding=(0,1)) 
@@ -90,6 +90,7 @@ output_padding=0)
         #output = nn.functional.log_softmax(layer_8, dim=1)
         
         return layer_8
+    
         
         
         

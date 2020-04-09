@@ -6,7 +6,7 @@ import torch
 import os
 
 from utils import get_global_pose
-
+from dataset import CHAR_TO_CLASS
 # constants for plotting
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 RIGHT_OF_SCREEN = (550,200)
@@ -46,6 +46,94 @@ def integral_heatmap_layer(heatmap):
     pose = torch.cat((x_positions, y_positions), dim=2)
     
     return pose
+
+def visualize_predictions(input_path, out_path, preds, ground_truth, timestamps):
+    
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    bottom_of_screen = (10,400)
+    near_bottom_of_screen = (10,350)
+    left_of_screen = (10, 200)
+    font_scale = 3
+    font_color = (255,255,255)
+    display_color = (255,0,0)
+    error_color = (0,0,255)
+    line_type = 2
+    
+    cap = cv2.VideoCapture(input_path)
+
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    fps = 15
+    
+    out = cv2.VideoWriter(out_path,fourcc, fps, (640,480))
+
+    timestamps = timestamps * fps
+
+    frame_num = 0
+    last_key = 0
+    cur_gt = ''
+    cur_preds = ''
+    
+    class_to_char = list(CHAR_TO_CLASS.keys())
+        
+    while(cap.isOpened()):
+        ret, frame = cap.read()
+
+        frame_num += 1
+
+        if not ret:
+            break
+
+        #gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        #frame = cv2.flip(frame,0)
+        if (last_key < len(timestamps) - 1 and frame_num > timestamps[last_key + 1]) or last_key == 0:
+            last_key += 1
+            
+            gt_char = class_to_char[int(ground_truth[last_key])].upper()
+            pred_char = class_to_char[int(preds[last_key])].upper()
+            
+            if gt_char == pred_char:
+                color = display_color 
+            else: 
+                color = error_color
+                
+            if gt_char != 'NONE':
+                cur_gt = cur_gt + gt_char
+            if pred_char != 'NONE':
+                cur_preds = cur_preds + pred_char
+                                
+            if pred_char == ' ':
+                pred_char = 'space'
+
+        frame = cv2.putText(frame, pred_char, 
+            left_of_screen, 
+            font, 
+            font_scale,
+            color,
+            line_type)
+            
+        frame = cv2.putText(frame, cur_preds, 
+            near_bottom_of_screen, 
+            font, 
+            font_scale/4,
+            font_color,
+            line_type)
+        
+        frame = cv2.putText(frame, cur_gt, 
+            bottom_of_screen, 
+            font, 
+            font_scale/4,
+            font_color,
+            line_type)
+            
+
+        #cv2.imshow('frame',frame)
+
+        out.write(frame)
+
+
+    cap.release()
+    out.release()
 
 class Visualizer():
     
@@ -92,8 +180,8 @@ class Visualizer():
                                               
     def update_capture(self, full_img, left_data, right_data):
         
-        left_hand_img, left_crop, stage_left_heatmap_np = left_data
-        right_hand_img, right_crop, stage_right_heatmap_np = right_data
+        left_hand_img, left_crop, left_score, stage_left_heatmap_np = left_data
+        right_hand_img, right_crop, right_score, stage_right_heatmap_np = right_data
         
         if self.visualize_cropped_output:
             # visualize joints

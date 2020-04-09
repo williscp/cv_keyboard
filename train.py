@@ -28,9 +28,19 @@ detection_handler = DetectionHandler(configs)
 Initialize data loader
 """
 train_set = Dataset(configs, label_path='labels/train.csv')
+val_set = Dataset(configs, label_path='labels/val.csv')
 
 train_loader = torch.utils.data.DataLoader(
     train_set,
+    batch_size=1,
+    num_workers=0,
+    pin_memory=False,
+    shuffle=True,
+    drop_last=True
+)
+
+val_loader = torch.utils.data.DataLoader(
+    val_set,
     batch_size=1,
     num_workers=0,
     pin_memory=False,
@@ -123,10 +133,9 @@ with tf.device(tf_device):
     for idx, batch in enumerate(train_loader):
         data, label = batch
         
-        video_id, tensor = data 
-        video_id = video_id.item()
+        video_id = label[0].item()
         
-        video = tensor.numpy().squeeze()
+        video = data.numpy().squeeze()
         #data = cv2.cvtColor(data, cv2.COLOR_BGR2RGB).squeeze()
         
         print("Video {}".format(video_id))
@@ -201,8 +210,96 @@ with tf.device(tf_device):
             """
             if visualizer:
                 
-                left_data = (left_hand_img, left_crop, stage_left_heatmap_np) 
-                right_data = (right_hand_img, right_crop, stage_right_heatmap_np)
+                left_data = (left_hand_img, left_crop, left_score, stage_left_heatmap_np) 
+                right_data = (right_hand_img, right_crop, right_score, stage_right_heatmap_np)
+                visualizer.update_capture(cv2.cvtColor(image, cv2.COLOR_RGB2BGR), left_data, right_data)
+        
+        if visualizer:
+            
+            visualizer.end_capture(video_id)        
+               
+    for idx, batch in enumerate(val_loader):
+        data, label = batch
+        
+        video_id = label[0].item()
+        
+        video = data.numpy().squeeze()
+        #data = cv2.cvtColor(data, cv2.COLOR_BGR2RGB).squeeze()
+        
+        print("Video {}".format(video_id))
+        
+        if visualizer: 
+            
+            visualizer.start_capture(video_id)
+            
+        for image in video:
+            
+            """
+            Detect bounding boxes
+            """
+            # perform detections, model does not expect a normalized image, normalization leads to worse results
+            
+            # convert to RGB
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            
+            boxes, scores = detector_utils.detect_objects(image, detection_graph, detect_sess)
+            
+            left_crop, right_crop, left_score, right_score = detection_handler.choose_next_candidates(image, boxes, scores)
+           
+            # generate crops
+            left_hand_img = detection_handler.crop_hand(image, left_crop)
+            right_hand_img = detection_handler.crop_hand(image, right_crop)
+            
+            # convert to BGR
+            left_hand_img = cv2.cvtColor(left_hand_img, cv2.COLOR_RGB2BGR)
+            right_hand_img = cv2.cvtColor(right_hand_img, cv2.COLOR_RGB2BGR)
+            
+            """
+            Pose estimation
+            """
+            
+            # perform estimation on left hand
+            left_hand_img = cv2.resize(left_hand_img, (configs.input_size, configs.input_size))
+            
+            # normalize image
+            left_hand_input = left_hand_img / 256.0 - 0.5
+            left_hand_input = np.expand_dims(left_hand_input, axis=0)
+            
+            # predict
+            predict_left_heatmap, stage_left_heatmap_np = pose_sess.run(
+                [model.current_heatmap, model.stage_heatmap],
+                feed_dict = {
+                    'input_image:0': left_hand_input,
+                    'center_map:0': test_center_map
+                }
+            )
+            
+            # perform estimation on right hand
+            right_hand_img = cv2.resize(right_hand_img, (configs.input_size, configs.input_size))
+            right_hand_img = cv2.flip(right_hand_img, 1)
+            
+            # normalize image
+            right_hand_input= right_hand_img / 256.0 - 0.5
+            # a bit of a hack, flip the orientation so the left hand looks like a right hand
+            # model seems to be trained on right hand only 
+            right_hand_input = np.expand_dims(right_hand_input, axis=0)
+            
+            # predict
+            predict_right_heatmap, stage_right_heatmap_np = pose_sess.run(
+                [model.current_heatmap, model.stage_heatmap],
+                feed_dict = {
+                    'input_image:0': right_hand_input,
+                    'center_map:0': test_center_map
+                }
+            )
+                        
+            """
+            Update visualizer 
+            """
+            if visualizer:
+                
+                left_data = (left_hand_img, left_crop, left_score, stage_left_heatmap_np) 
+                right_data = (right_hand_img, right_crop, right_score, stage_right_heatmap_np)
                 visualizer.update_capture(cv2.cvtColor(image, cv2.COLOR_RGB2BGR), left_data, right_data)
         
         if visualizer:

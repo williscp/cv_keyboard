@@ -4,7 +4,7 @@ class Config():
 
         # data loading
 
-        self.data_dir = './data'
+        self.data_dir = './data/joints'
         self.video_sampling_rate = 1
         self.video_fps = 15
 
@@ -61,7 +61,7 @@ class Config():
 
         # output
         
-        self.visualize_cropped_output = False # output detection + joint estimates
+        self.visualize_cropped_output = True # output detection + joint estimates
         self.visualize_full_output = True
         self.visualize_joint_positions = True # output joint locations as npy files 
         self.visualize_stage_heatmaps = False # output last layer heatmaps
@@ -74,20 +74,30 @@ class Config():
         # model
         
         self.epochs = 250
-        self.lr = 1e-3
+        self.lr = 1e-4
         self.input_freqs = 11 
-        self.spectrogram_mean = 2.59783414913e-05
-        self.class_weights = [
-            0.00157526, 0.01949247, 0.03721764, 0.03207116, 0.03721764, 0.01428861,
-            0.03624818, 0.03445327, 0.02999715, 0.02343101, 0.0756698, 0.04296288,
-            0.0260642, 0.03445327, 0.0192232, 0.01556738, 0.04167618, 0.08002114,
-            0.02034753, 0.02230434, 0.01949247, 0.02936416, 0.05480771, 0.04901612,
-            0.0756698, 0.03721764, 0.08002114, 0.0101286]
+        self.spectrogram_mean = 2.56440538185e-05
+        #self.class_weights = [
+        #    0.00157526, 0.01949247, 0.03721764, 0.03207116, 0.03721764, 0.01428861,
+        #    0.03624818, 0.03445327, 0.02999715, 0.02343101, 0.0756698, 0.04296288,
+        #    0.0260642, 0.03445327, 0.0192232, 0.01556738, 0.04167618, 0.08002114,
+        #    0.02034753, 0.02230434, 0.01949247, 0.02936416, 0.05480771, 0.04901612,
+        #    0.0756698, 0.03721764, 0.08002114, 0.0101286]
+        
+        self.class_weights = [ 
+            0.0018884, 0.01736119, 0.04402892, 0.03586691, 0.0285816, 0.01299011,
+            0.03282444, 0.03671775, 0.02375622, 0.01884044, 0.07679666, 0.04889706,
+            0.02756365, 0.03466211, 0.0190726, 0.01716862, 0.0342783, 0.07875027,
+            0.02019225, 0.01993222, 0.01726436, 0.03282444, 0.06153197, 0.05049214,
+            0.07875027, 0.03715848, 0.08297167, 0.00883695]
+
 
         
         # spectrogram configs:
         
         self.spectrogram_window_type = 'hann'
-        self.spectrogram_window_size = 20
-        self.spectrogram_window_overlap = 15
+        self.spectrogram_window_size = 20 #20
+        self.spectrogram_window_overlap = 18 #15
+        self.spectrogram_bucket_ratio = 3 # number of spectrogram buckets to consider as single detection bucket 
+        self.spectrogram_time_offset = 0.666667 # offset due to bucket size
         

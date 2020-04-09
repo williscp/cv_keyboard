@@ -2,6 +2,7 @@ data
 output
 videos
 images
+saves
 .ipynb_checkpoints
 convolutional_pose_machines_tensorflow/models/weights
 convolutional_pose_machines_tensorflow/output
