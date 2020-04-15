@@ -70,6 +70,11 @@ class Config():
         self.model_dir = './models'
         self.hand_pose_estimator_weights = './convolutional_pose_machines_tensorflow/models/weights/cpm_hand.pkl'
         self.hand_detector_weights = 'handtracking/hand_inference_graph/frozen_inference_graph.pb'
+        
+        # data augmentation:
+        
+        self.augmentation_max_angle = 20
+        self.augmentation_max_scale = 0.2
 
         # model
         

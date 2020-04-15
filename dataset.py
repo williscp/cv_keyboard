@@ -7,7 +7,8 @@ import numpy as np
 import cv2
 import json
 
-from preprocessing.spectrogram import SpectrogramGenerator 
+from preprocessing.spectrogram import SpectrogramGenerator
+from preprocessing.augmentation import Augmentor
 
 CHAR_TO_CLASS = {
     'None': 0,
@@ -116,11 +117,16 @@ class SpectrogramDataset(torch.utils.data.Dataset):
         self.left_path_template = '{}_left_joint_signal.npy'
         self.right_path_template = '{}_right_joint_signal.npy'
         
+        self.augmentor = Augmentor(configs)
+        
         with open(self.label_path) as csvfile:
 
             self.z = {} # basis coefficients
             self.t = {} # time buckets
             self.f = {} # frequency basis
+            
+            self.left_joints = {}
+            self.right_joints = {}
                                         
             self.labels = {} # string labels
             self.label_tensor = {} # class-mapped tensor labels 
@@ -147,58 +153,72 @@ class SpectrogramDataset(torch.utils.data.Dataset):
 
                 left_joints = np.load(left_path)
                 right_joints = np.load(right_path)
-
-                print("Generating spectrograms")
-
-                z, t, f = self.spectrogram_generator.process_signal(left_joints, right_joints)
-
-                """
-                # alternative for defining our own loss if needed 
-
-                label_tensor = np.zeros((len(t), 27))
-
-                for jdx, timestamp in enumerate(timestamps):
-
-                    time_slot = bisect.bisect_left(t, timestamp)
-                    label_tensor[time_slot][CHAR_TO_CLASS[labels[jdx]]] = 1.0
-
-                label_tensor = torch.tensor(label_tensor, dtype=torch.float).to("cuda")
-                """
-                # create detection buckets 
                 
-                num_buckets = int(len(t) / self.bucket_ratio)                
-                total_time = left_joints.shape[0] / self.fps
-                t = np.linspace(self.time_offset, total_time - self.time_offset, num_buckets)
-                
-                z = z[: self.bucket_ratio * num_buckets]
-                
-                # normalize:
-
-                z = z - self.data_mean
-                                   
-                # format labels:
-
-                label_tensor = np.zeros(len(t))
-
-                for jdx, timestamp in enumerate(timestamps):
-
-                    time_slot = bisect.bisect_left(t, timestamp)
-                    label_tensor[time_slot] = CHAR_TO_CLASS[labels[jdx]]
-
-                label_tensor = torch.tensor(label_tensor, dtype=torch.long).to("cuda")
-
-                data = torch.tensor(z, dtype=torch.float).to("cuda")
-
-                self.z[idx] = data
-                self.t[idx] = t 
-                self.f[idx] = f
-                self.label_tensor[idx] = label_tensor
+                self.left_joints[idx] = left_joints
+                self.right_joints[idx] = right_joints
 
 
     def __len__(self):
         return len(self.labels)
     
     def __getitem__(self, idx):
+        #return self.z[idx], self.label_tensor[idx]
+        
+        video_id, labels, timestamps = self.labels[idx]
+        
+        left_joints = self.augmentor.augment_joint_locations(self.left_joints[idx])
+        right_joints = self.augmentor.augment_joint_locations(self.right_joints[idx])
+
+        #print("Generating spectrograms")
+
+        z, t, f = self.spectrogram_generator.process_signal(left_joints, right_joints)
+
+        """
+        # alternative for defining our own loss if needed 
+
+        label_tensor = np.zeros((len(t), 27))
+
+        for jdx, timestamp in enumerate(timestamps):
+
+            time_slot = bisect.bisect_left(t, timestamp)
+            label_tensor[time_slot][CHAR_TO_CLASS[labels[jdx]]] = 1.0
+
+        label_tensor = torch.tensor(label_tensor, dtype=torch.float).to("cuda")
+        """
+        # create detection buckets 
+
+        """
+
+        num_buckets = int(len(t) / self.bucket_ratio)                
+        total_time = left_joints.shape[0] / self.fps
+        t = np.linspace(self.time_offset, total_time - self.time_offset, num_buckets)
+
+        z = z[: self.bucket_ratio * num_buckets]
+
+        """
+
+        # normalize:
+
+        z = z - self.data_mean
+
+        # format labels:
+
+        label_tensor = np.zeros(len(t))
+
+        for jdx, timestamp in enumerate(timestamps):
+
+            time_slot = bisect.bisect_left(t, timestamp)
+            label_tensor[time_slot] = CHAR_TO_CLASS[labels[jdx]]
+
+        label_tensor = torch.tensor(label_tensor, dtype=torch.long).to("cuda")
+
+        data = torch.tensor(z, dtype=torch.float).to("cuda")
+
+        self.z[idx] = data
+        self.t[idx] = t 
+        self.f[idx] = f
+        self.label_tensor[idx] = label_tensor
+        
         return self.z[idx], self.label_tensor[idx]
     
     def getitem__(self, idx):

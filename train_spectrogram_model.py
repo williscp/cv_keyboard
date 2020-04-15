@@ -41,7 +41,7 @@ val_loader = torch.utils.data.DataLoader(
 Train FC model
 
 """
-"""
+
 model = SpectrogramModel(configs).to("cuda")
 optimizer = torch.optim.Adam(model.parameters(), lr=configs.lr)
 class_weights = torch.tensor(configs.class_weights, dtype=torch.float).to("cuda")
@@ -150,5 +150,6 @@ with torch.no_grad():
                 
         visualize_predictions(in_file, out_file, preds, label, t)
     
+"""
     
     
