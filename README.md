@@ -1,5 +1,7 @@
 # Vision Based Keyboard
 
+![alt text](https://github.com/williscp/cv_keyboard/blob/master/demo.gif "Demo")
+
 Hand pose estimator from: https://github.com/timctho/convolutional-pose-machines-tensorflow
 
 Hand detector from: https://github.com/victordibia/handtracking
