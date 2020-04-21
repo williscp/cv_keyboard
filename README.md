@@ -15,7 +15,7 @@ Hand detector from: https://github.com/victordibia/handtracking
 
 # Models 
 
-| MOdel    | Training Acc | Validation Acc |
+| Model    | Training Acc | Validation Acc |
 |----------|--------------|----------------|
 | Baseline |     78.3     |      74.6      |
 | Conv-Net |     98.6     |      79.3      |
